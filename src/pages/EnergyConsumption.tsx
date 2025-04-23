@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -99,12 +98,11 @@ const EnergyConsumption: React.FC = () => {
           throw consError;
         }
         
-        setConsumptionData(consData || []);
+        // Type assertion to ensure correct type
+        setConsumptionData(consData as EnergyConsumptionData[]);
         
         // Generate mock savings data for demonstration
         if (consData && consData.length > 0) {
-          // Assuming we have some pre-solar and post-solar data
-          // For real implementation, this would come from actual solar production data
           const mockSavings: EnergySavingsData[] = [];
           let totalSavingsAmount = 0;
           let totalSavingsPercentage = 0;
@@ -113,7 +111,7 @@ const EnergyConsumption: React.FC = () => {
           const recentMonths = Math.min(consData.length, 6);
           
           for (let i = 0; i < recentMonths; i++) {
-            const item = consData[i];
+            const item = consData[i] as EnergyConsumptionData;
             const month = format(parseISO(item.period_start), 'MMM yyyy');
             
             // Mock pre-solar is the actual consumption plus a random amount (15-30%)

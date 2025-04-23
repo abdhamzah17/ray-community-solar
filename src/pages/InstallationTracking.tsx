@@ -19,8 +19,8 @@ interface Project {
   status: string;
   progress_percentage: number;
   total_cost: number;
-  start_date: string;
-  estimated_completion_date: string;
+  start_date?: string;
+  estimated_completion_date?: string;
   created_at: string;
 }
 
@@ -106,7 +106,7 @@ const InstallationTracking: React.FC = () => {
         }
         
         // Combine all data
-        const enhancedProjects = projectData.map(project => {
+        const enhancedProjects: Project[] = projectData.map(project => {
           const community = communitiesData?.find(c => c.id === project.community_id);
           const provider = providersData?.find(p => p.id === project.provider_id);
           

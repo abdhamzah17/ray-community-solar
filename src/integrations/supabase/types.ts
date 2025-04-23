@@ -80,6 +80,54 @@ export type Database = {
           },
         ]
       }
+      energy_consumption: {
+        Row: {
+          bill_amount: number
+          community_id: string
+          created_at: string | null
+          id: string
+          period_end: string
+          period_start: string
+          units_consumed: number
+          user_id: string
+        }
+        Insert: {
+          bill_amount: number
+          community_id: string
+          created_at?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          units_consumed: number
+          user_id: string
+        }
+        Update: {
+          bill_amount?: number
+          community_id?: string
+          created_at?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          units_consumed?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_consumption_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_consumption_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -115,6 +163,7 @@ export type Database = {
           id: string
           progress_percentage: number
           provider_id: string
+          start_date: string | null
           status: string
           total_cost: number
         }
@@ -125,6 +174,7 @@ export type Database = {
           id?: string
           progress_percentage?: number
           provider_id: string
+          start_date?: string | null
           status: string
           total_cost: number
         }
@@ -135,6 +185,7 @@ export type Database = {
           id?: string
           progress_percentage?: number
           provider_id?: string
+          start_date?: string | null
           status?: string
           total_cost?: number
         }
