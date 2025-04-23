@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 
 interface Provider {
   id: string;
-  name: string;
+  name: string | null;
   email: string;
 }
 
@@ -90,10 +89,10 @@ const CommunityVoting: React.FC = () => {
             closed_at
           `)
           .eq('id', quoteRequestId)
-          .single();
+          .maybeSingle();
           
-        if (requestError) {
-          throw requestError;
+        if (requestError || !requestData) {
+          throw requestError || new Error("Quote request not found");
         }
         
         // Get community details
@@ -101,10 +100,10 @@ const CommunityVoting: React.FC = () => {
           .from('communities')
           .select('name, admin_id')
           .eq('id', requestData.community_id)
-          .single();
+          .maybeSingle();
           
-        if (communityError) {
-          throw communityError;
+        if (communityError || !communityData) {
+          throw communityError || new Error("Community not found");
         }
         
         // Check if user is community admin
@@ -121,19 +120,24 @@ const CommunityVoting: React.FC = () => {
           `)
           .eq('quote_request_id', quoteRequestId);
           
-        if (quotesError) {
-          throw quotesError;
+        if (quotesError || !quotesData) {
+          throw quotesError || new Error("No provider quotes found.");
         }
         
         // Get provider details
         const providerIds = quotesData.map(quote => quote.provider_id);
-        const { data: providersData, error: providersError } = await supabase
-          .from('profiles')
-          .select('id, name, email')
-          .in('id', providerIds);
-          
-        if (providersError) {
-          throw providersError;
+        let providersData: Provider[] = [];
+        if (providerIds.length > 0) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, name, email')
+            .in('id', providerIds);
+          if (error) throw error;
+          if (data) providersData = data.map(p => ({
+            id: p.id,
+            name: p.name,
+            email: p.email
+          }));
         }
         
         // Get votes
@@ -142,25 +146,25 @@ const CommunityVoting: React.FC = () => {
           .select('id, provider_quote_id, voter_id')
           .eq('quote_request_id', quoteRequestId);
           
-        if (votesError) {
-          throw votesError;
+        if (votesError || !votesData) {
+          throw votesError || new Error("Votes could not be loaded");
         }
         
         // Calculate vote counts and whether current user has voted
         const totalVotes = votesData ? votesData.length : 0;
-        const enhancedQuotes = quotesData.map(quote => {
-          const provider = providersData?.find(p => p.id === quote.provider_id);
-          const quotesVotes = votesData?.filter(v => v.provider_quote_id === quote.id).length || 0;
+        const enhancedQuotes: Quote[] = quotesData.map(quote => {
+          const provider = providersData.find(p => p.id === quote.provider_id) || { id: quote.provider_id, name: 'Unknown Provider', email: '' };
+          const quotesVotes = votesData.filter(v => v.provider_quote_id === quote.id).length || 0;
           const votePercentage = totalVotes > 0 ? Math.round((quotesVotes / totalVotes) * 100) : 0;
-          const hasUserVoted = votesData?.some(v => v.provider_quote_id === quote.id && v.voter_id === currentUser.id) || false;
+          const hasUserVoted = votesData.some(v => v.provider_quote_id === quote.id && v.voter_id === currentUser.id) || false;
           
           return {
             ...quote,
-            provider: provider || { id: quote.provider_id, name: 'Unknown Provider', email: '' },
+            provider,
             votes_count: quotesVotes,
             vote_percentage: votePercentage,
             has_user_voted: hasUserVoted
-          };
+          } as Quote;
         });
         
         // Sort quotes by votes count (descending)
@@ -201,9 +205,9 @@ const CommunityVoting: React.FC = () => {
           .select('id')
           .eq('quote_request_id', quoteRequestId)
           .eq('voter_id', currentUser?.id)
-          .single();
+          .maybeSingle();
           
-        if (findError && findError.code !== 'PGRST116') {
+        if (findError) {
           throw findError;
         }
         

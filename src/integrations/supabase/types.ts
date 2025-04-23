@@ -9,10 +9,121 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      communities: {
+        Row: {
+          admin_id: string
+          community_code: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          zip_code: string
+        }
+        Insert: {
+          admin_id: string
+          community_code: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          zip_code: string
+        }
+        Update: {
+          admin_id?: string
+          community_code?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          zip_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communities_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          joined_at: string | null
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          joined_at?: string | null
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          joined_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          is_solar_provider: boolean | null
+          name: string | null
+          phone: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+          is_solar_provider?: boolean | null
+          name?: string | null
+          phone?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          is_solar_provider?: boolean | null
+          name?: string | null
+          phone?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      community_member_counts: {
+        Row: {
+          community_id: string | null
+          member_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never
