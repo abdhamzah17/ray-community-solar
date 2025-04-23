@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -7,16 +7,18 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Loader } from 'lucide-react';
 
 // Form validation schema
 const formSchema = z.object({
-  name: z.string().min(3, { message: 'Community name must be at least 3 characters' }),
-  zipCode: z.string().length(6, { message: 'Zip code must be 6 digits' }).regex(/^\d+$/, { message: 'Zip code must contain only numbers' }),
-  description: z.string().min(10, { message: 'Please provide a brief description (at least 10 characters)' }),
+  name: z.string().min(3, { message: 'Community name must be at least 3 characters long' }),
+  zipCode: z.string().min(6, { message: 'Please enter a valid ZIP code' }),
+  description: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -26,7 +28,8 @@ const CreateCommunity: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [communityCode, setCommunityCode] = useState<string | null>(null);
+  const [existingCommunity, setExistingCommunity] = useState<{ id: string, name: string } | null>(null);
+  const [isCheckingMembership, setIsCheckingMembership] = useState(true);
 
   // Form setup with react-hook-form and zod validation
   const form = useForm<FormValues>({
@@ -38,31 +41,105 @@ const CreateCommunity: React.FC = () => {
     },
   });
 
-  // Redirect if not logged in
-  if (!currentUser) {
-    navigate('/login');
-    return null;
-  }
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
+    // Check if user is already a member of a community
+    const checkExistingMembership = async () => {
+      try {
+        setIsCheckingMembership(true);
+        
+        // Check if user is already an admin of a community
+        const { data: adminCommunity, error: adminError } = await supabase
+          .from('communities')
+          .select('id, name')
+          .eq('admin_id', currentUser.id)
+          .maybeSingle();
+          
+        if (adminCommunity) {
+          setExistingCommunity(adminCommunity);
+          return;
+        }
+        
+        // Check if user is a member of any community
+        const { data: membership, error: memberError } = await supabase
+          .from('community_members')
+          .select('community_id')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+          
+        if (membership) {
+          // Get community details
+          const { data: community, error: communityError } = await supabase
+            .from('communities')
+            .select('id, name')
+            .eq('id', membership.community_id)
+            .single();
+            
+          if (community) {
+            setExistingCommunity(community);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking membership:', error);
+      } finally {
+        setIsCheckingMembership(false);
+      }
+    };
+
+    checkExistingMembership();
+  }, [currentUser, navigate]);
 
   const onSubmit = async (data: FormValues) => {
+    if (!currentUser) return;
+    
     setIsLoading(true);
     try {
-      // This would be replaced with an actual API call to create the community
-      // For now, we'll simulate a successful creation
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Generate a random 6-character community code
+      const communityCode = Math.random().toString(36).substring(2, 8).toUpperCase();
       
-      // Generate a random community code
-      const generatedCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      setCommunityCode(generatedCode);
+      // Create the community
+      const { data: community, error } = await supabase
+        .from('communities')
+        .insert({
+          name: data.name,
+          zip_code: data.zipCode,
+          description: data.description || null,
+          admin_id: currentUser.id,
+          community_code: communityCode
+        })
+        .select()
+        .single();
+        
+      if (error) {
+        throw error;
+      }
+      
+      // Add the creator as a member of the community
+      const { error: memberError } = await supabase
+        .from('community_members')
+        .insert({
+          user_id: currentUser.id,
+          community_id: community.id
+        });
+        
+      if (memberError) {
+        throw memberError;
+      }
       
       toast({
-        title: 'Community created successfully!',
-        description: 'You are now the admin of this community.',
+        title: 'Community Created',
+        description: `${data.name} has been successfully created. Your community code is ${communityCode}.`,
       });
-    } catch (error) {
+      
+      navigate('/dashboard');
+    } catch (error: any) {
       toast({
-        title: 'Failed to create community',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        title: 'Error Creating Community',
+        description: error.message,
         variant: 'destructive',
       });
     } finally {
@@ -70,27 +147,60 @@ const CreateCommunity: React.FC = () => {
     }
   };
 
+  if (!currentUser) {
+    return null;
+  }
+
+  if (isCheckingMembership) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-full border-4 border-solar-yellow border-t-transparent animate-spin"></div>
+          <p className="text-lg">Checking your community status...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto py-8">
-      <Button 
-        variant="outline" 
-        onClick={() => navigate(-1)}
-        className="mb-6"
-      >
-        ← Back
-      </Button>
+    <div className="container mx-auto py-8 max-w-2xl">
+      <h1 className="text-3xl font-bold mb-8 text-center">Create a Community</h1>
       
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Create a New Community</CardTitle>
-          <CardDescription>
-            Start a solar community in your area and invite your neighbors to join
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!communityCode ? (
+      {existingCommunity ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Already in a Community</CardTitle>
+            <CardDescription>
+              You are already a member of a community. Each user can only be part of one community at a time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p>You are currently a member of <span className="font-semibold">{existingCommunity.name}</span>.</p>
+            <p>
+              If you want to create a new community, you'll need to leave your current community first.
+              Please contact the community administrator to discuss this.
+            </p>
+            <div className="flex justify-end space-x-4 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => navigate('/dashboard')}
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Community Details</CardTitle>
+            <CardDescription>
+              Create a new solar community for your neighborhood
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
                   control={form.control}
                   name="name"
@@ -98,92 +208,74 @@ const CreateCommunity: React.FC = () => {
                     <FormItem>
                       <FormLabel>Community Name</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="e.g., Green Valley Residency" 
-                          {...field} 
-                          className="solar-input"
-                        />
+                        <Input placeholder="e.g., Green Meadows Community" {...field} disabled={isLoading} />
                       </FormControl>
-                      <FormDescription>
-                        Choose a name that represents your neighborhood or building
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                
                 <FormField
                   control={form.control}
                   name="zipCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Zip Code</FormLabel>
+                      <FormLabel>ZIP Code</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="e.g., 600001" 
-                          {...field} 
-                          maxLength={6}
-                          className="solar-input"
-                        />
+                        <Input placeholder="e.g., 600001" {...field} disabled={isLoading} />
                       </FormControl>
-                      <FormDescription>
-                        Enter the 6-digit pin code of your community location
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                
                 <FormField
                   control={form.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel>Description (Optional)</FormLabel>
                       <FormControl>
                         <Textarea 
-                          placeholder="Briefly describe your community and solar goals" 
-                          {...field} 
-                          className="min-h-[100px]"
+                          placeholder="Tell potential members about your community..."
+                          className="resize-none"
+                          {...field}
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button 
-                  type="submit" 
-                  className="w-full bg-solar-yellow text-foreground hover:bg-solar-orange"
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Creating Community...' : 'Create Community'}
-                </Button>
+                
+                <div className="flex justify-between pt-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => navigate('/dashboard')}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit"
+                    className="bg-solar-yellow text-foreground hover:bg-solar-orange"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" /> Creating...
+                      </>
+                    ) : (
+                      'Create Community'
+                    )}
+                  </Button>
+                </div>
               </form>
             </Form>
-          ) : (
-            <div className="space-y-6 text-center">
-              <div className="rounded-md bg-muted p-6">
-                <h3 className="text-lg font-medium mb-2">Community Created Successfully!</h3>
-                <p className="text-muted-foreground mb-4">
-                  Share this unique code with neighbors so they can join your community:
-                </p>
-                <div className="bg-white border-2 border-solar-yellow rounded-md p-3 text-2xl font-bold tracking-wider text-center">
-                  {communityCode}
-                </div>
-              </div>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  As the community admin, you can manage members and track energy usage
-                </p>
-                <Button 
-                  onClick={() => navigate('/dashboard')}
-                  className="bg-solar-blue text-white hover:bg-solar-blue/90"
-                >
-                  Go to Dashboard
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

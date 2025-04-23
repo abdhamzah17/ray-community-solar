@@ -36,12 +36,25 @@ const Navbar: React.FC = () => {
           <Link to="/how-it-works" className="text-foreground hover:text-solar-orange transition-colors">
             How It Works
           </Link>
+          {currentUser && !currentUser.isSolarProvider && (
+            <>
+              <Link to="/energy/input" className="text-foreground hover:text-solar-orange transition-colors">
+                Energy Input
+              </Link>
+              <Link to="/energy/consumption" className="text-foreground hover:text-solar-orange transition-colors">
+                Energy Consumption
+              </Link>
+              <Link to="/installation/tracking" className="text-foreground hover:text-solar-orange transition-colors">
+                Installation Tracking
+              </Link>
+            </>
+          )}
         </div>
         
         <div className="flex items-center space-x-3">
           {currentUser ? (
             <>
-              <Link to="/dashboard">
+              <Link to={currentUser.isSolarProvider ? "/provider/dashboard" : "/dashboard"}>
                 <Button variant="outline" className="border-solar-yellow text-foreground hover:bg-solar-yellow hover:text-foreground">
                   Dashboard
                 </Button>

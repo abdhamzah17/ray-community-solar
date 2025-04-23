@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -9,76 +9,154 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { AlertCircle, Loader } from 'lucide-react';
 
-// Form validation schemas
-const codeSchema = z.object({
-  communityCode: z.string().length(6, { message: 'Community code must be 6 characters' }),
+// Form validation schema
+const formSchema = z.object({
+  communityCode: z
+    .string()
+    .min(6, { message: 'Community code must be 6 characters' })
+    .max(6, { message: 'Community code must be 6 characters' }),
 });
 
-const zipCodeSchema = z.object({
-  zipCode: z.string().length(6, { message: 'Zip code must be 6 digits' }).regex(/^\d+$/, { message: 'Zip code must contain only numbers' }),
-});
-
-type CodeFormValues = z.infer<typeof codeSchema>;
-type ZipCodeFormValues = z.infer<typeof zipCodeSchema>;
-
-// Mock data for communities
-const MOCK_COMMUNITIES = [
-  { id: '1', name: 'Green Meadows Community', zipCode: '600001', members: 24, description: 'A community focused on sustainable living in Chennai North' },
-  { id: '2', name: 'Sunlit Apartments', zipCode: '600042', members: 16, description: 'Apartment complex in Velachery seeking solar alternatives' },
-  { id: '3', name: 'Eco Garden Housing', zipCode: '600042', members: 32, description: 'Large housing community with shared green spaces' },
-];
+type FormValues = z.infer<typeof formSchema>;
 
 const JoinCommunity: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('code');
-  const [foundCommunities, setFoundCommunities] = useState<typeof MOCK_COMMUNITIES>([]);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [existingCommunity, setExistingCommunity] = useState<{ id: string, name: string } | null>(null);
+  const [isCheckingMembership, setIsCheckingMembership] = useState(true);
 
-  // Form setup for community code
-  const codeForm = useForm<CodeFormValues>({
-    resolver: zodResolver(codeSchema),
+  // Form setup with react-hook-form and zod validation
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       communityCode: '',
     },
   });
 
-  // Form setup for zip code search
-  const zipCodeForm = useForm<ZipCodeFormValues>({
-    resolver: zodResolver(zipCodeSchema),
-    defaultValues: {
-      zipCode: '',
-    },
-  });
+  useEffect(() => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
 
-  // Redirect if not logged in
-  if (!currentUser) {
-    navigate('/login');
-    return null;
-  }
+    // Check if user is already a member of a community
+    const checkExistingMembership = async () => {
+      try {
+        setIsCheckingMembership(true);
+        
+        // Check if user is already an admin of a community
+        const { data: adminCommunity, error: adminError } = await supabase
+          .from('communities')
+          .select('id, name')
+          .eq('admin_id', currentUser.id)
+          .maybeSingle();
+          
+        if (adminCommunity) {
+          setExistingCommunity(adminCommunity);
+          return;
+        }
+        
+        // Check if user is a member of any community
+        const { data: membership, error: memberError } = await supabase
+          .from('community_members')
+          .select('community_id')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+          
+        if (membership) {
+          // Get community details
+          const { data: community, error: communityError } = await supabase
+            .from('communities')
+            .select('id, name')
+            .eq('id', membership.community_id)
+            .single();
+            
+          if (community) {
+            setExistingCommunity(community);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking membership:', error);
+      } finally {
+        setIsCheckingMembership(false);
+      }
+    };
 
-  const onCodeSubmit = async (data: CodeFormValues) => {
+    checkExistingMembership();
+  }, [currentUser, navigate]);
+
+  const onSubmit = async (data: FormValues) => {
+    if (!currentUser) return;
+    
     setIsLoading(true);
     try {
-      // This would be replaced with an actual API call to join by code
-      // For now, we'll simulate a successful join
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Find community with the provided code
+      const { data: community, error: communityError } = await supabase
+        .from('communities')
+        .select('id, name, admin_id')
+        .eq('community_code', data.communityCode.toUpperCase())
+        .single();
+        
+      if (communityError) {
+        if (communityError.code === 'PGRST116') {
+          toast({
+            title: 'Community Not Found',
+            description: 'The community code you entered is invalid. Please check and try again.',
+            variant: 'destructive',
+          });
+        } else {
+          throw communityError;
+        }
+        return;
+      }
+      
+      // Check if user is already a member (redundant check)
+      const { data: existingMember, error: memberCheckError } = await supabase
+        .from('community_members')
+        .select('id')
+        .eq('user_id', currentUser.id)
+        .eq('community_id', community.id)
+        .maybeSingle();
+        
+      if (existingMember) {
+        toast({
+          title: 'Already a Member',
+          description: `You are already a member of ${community.name}.`,
+          variant: 'default',
+        });
+        navigate('/dashboard');
+        return;
+      }
+      
+      // Add user as a member of the community
+      const { error: joinError } = await supabase
+        .from('community_members')
+        .insert({
+          user_id: currentUser.id,
+          community_id: community.id
+        });
+        
+      if (joinError) {
+        throw joinError;
+      }
       
       toast({
-        title: 'Successfully joined community!',
-        description: 'You are now a member of this community.',
+        title: 'Community Joined',
+        description: `You have successfully joined ${community.name}.`,
       });
       
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: 'Failed to join community',
-        description: error instanceof Error ? error.message : 'Invalid community code or community not found',
+        title: 'Error Joining Community',
+        description: error.message,
         variant: 'destructive',
       });
     } finally {
@@ -86,177 +164,129 @@ const JoinCommunity: React.FC = () => {
     }
   };
 
-  const onZipCodeSubmit = async (data: ZipCodeFormValues) => {
-    setIsLoading(true);
-    try {
-      // This would be replaced with an actual API call to search communities
-      // For now, we'll simulate a search using our mock data
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const results = MOCK_COMMUNITIES.filter(
-        community => community.zipCode === data.zipCode
-      );
-      
-      setFoundCommunities(results);
-      setHasSearched(true);
-      
-      if (results.length === 0) {
-        toast({
-          title: 'No communities found',
-          description: 'No communities found with this zip code. Consider creating one!',
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Search failed',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (!currentUser) {
+    return null;
+  }
 
-  const handleJoinCommunity = (communityId: string) => {
-    // This would be replaced with an actual API call to join the community
-    // For now, we'll simulate a successful join
-    toast({
-      title: 'Successfully joined community!',
-      description: 'You are now a member of this community.',
-    });
-    
-    navigate('/dashboard');
-  };
+  if (isCheckingMembership) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-full border-4 border-solar-yellow border-t-transparent animate-spin"></div>
+          <p className="text-lg">Checking your community status...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-2xl mx-auto py-8">
-      <Button 
-        variant="outline" 
-        onClick={() => navigate(-1)}
-        className="mb-6"
-      >
-        ← Back
-      </Button>
+    <div className="container mx-auto py-8 max-w-2xl">
+      <h1 className="text-3xl font-bold mb-8 text-center">Join a Community</h1>
       
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Join a Community</CardTitle>
-          <CardDescription>
-            Connect with neighbors to share solar benefits
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="code" value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="code">Join with Code</TabsTrigger>
-              <TabsTrigger value="search">Search by Zip Code</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="code" className="space-y-4 pt-4">
-              <Form {...codeForm}>
-                <form onSubmit={codeForm.handleSubmit(onCodeSubmit)} className="space-y-4">
-                  <FormField
-                    control={codeForm.control}
-                    name="communityCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Community Code</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="Enter the 6-digit code" 
-                            {...field} 
-                            maxLength={6}
-                            className="solar-input uppercase"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-solar-yellow text-foreground hover:bg-solar-orange"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Joining...' : 'Join Community'}
-                  </Button>
-                </form>
-              </Form>
-            </TabsContent>
-            
-            <TabsContent value="search" className="space-y-4 pt-4">
-              <Form {...zipCodeForm}>
-                <form onSubmit={zipCodeForm.handleSubmit(onZipCodeSubmit)} className="space-y-4">
-                  <FormField
-                    control={zipCodeForm.control}
-                    name="zipCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Zip Code</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="e.g., 600001" 
-                            {...field} 
-                            maxLength={6}
-                            className="solar-input"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-solar-yellow text-foreground hover:bg-solar-orange"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Searching...' : 'Find Communities'}
-                  </Button>
-                </form>
-              </Form>
-              
-              {hasSearched && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-medium mb-4">Search Results</h3>
-                  
-                  {foundCommunities.length > 0 ? (
-                    <div className="space-y-4">
-                      {foundCommunities.map(community => (
-                        <div 
-                          key={community.id}
-                          className="border rounded-lg p-4"
-                        >
-                          <h4 className="font-medium">{community.name}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {community.members} members • Zip Code: {community.zipCode}
-                          </p>
-                          <p className="text-sm mb-4">{community.description}</p>
-                          <Button 
-                            onClick={() => handleJoinCommunity(community.id)}
-                            className="bg-solar-blue text-white hover:bg-solar-blue/90"
-                          >
-                            Join This Community
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 border rounded-lg">
-                      <p className="text-muted-foreground mb-4">No communities found in this zip code</p>
-                      <Button 
-                        onClick={() => navigate('/communities/create')}
-                        className="bg-solar-green text-white hover:bg-solar-green/90"
-                      >
-                        Create a New Community
-                      </Button>
-                    </div>
+      {existingCommunity ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Already in a Community</CardTitle>
+            <CardDescription>
+              You are already a member of a community. Each user can only be part of one community at a time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p>You are currently a member of <span className="font-semibold">{existingCommunity.name}</span>.</p>
+            <p>
+              If you want to join a different community, you'll need to leave your current community first.
+              Please contact the community administrator to discuss this.
+            </p>
+            <div className="flex justify-end space-x-4 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => navigate('/dashboard')}
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Enter Community Code</CardTitle>
+            <CardDescription>
+              Enter the 6-character code provided by the community admin
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <Alert className="bg-muted border border-solar-yellow text-foreground">
+                  <AlertCircle className="h-4 w-4 text-solar-yellow" />
+                  <AlertTitle>Important</AlertTitle>
+                  <AlertDescription>
+                    You can only join one community at a time. Once you join a community, you'll need to leave it before joining another.
+                  </AlertDescription>
+                </Alert>
+                
+                <FormField
+                  control={form.control}
+                  name="communityCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Community Code</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="e.g., ABC123" 
+                          {...field} 
+                          value={field.value.toUpperCase()}
+                          maxLength={6}
+                          disabled={isLoading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
                   )}
+                />
+                
+                <div className="flex justify-between pt-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => navigate('/dashboard')}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit"
+                    className="bg-solar-yellow text-foreground hover:bg-solar-orange"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" /> Joining...
+                      </>
+                    ) : (
+                      'Join Community'
+                    )}
+                  </Button>
                 </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                
+                <div className="text-center mt-6">
+                  <p className="text-sm text-muted-foreground">Don't have a code?</p>
+                  <Button 
+                    type="button" 
+                    variant="link" 
+                    onClick={() => navigate('/communities/create')}
+                    className="text-solar-blue"
+                    disabled={isLoading}
+                  >
+                    Create your own community
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

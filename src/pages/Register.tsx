@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Loader } from 'lucide-react';
 
 // Form validation schema
 const formSchema = z.object({
@@ -28,10 +29,17 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const Register: React.FC = () => {
-  const { register: registerUser } = useAuth();
+  const { register: registerUser, currentUser } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   // Form setup with react-hook-form and zod validation
   const form = useForm<FormValues>({
@@ -50,23 +58,16 @@ const Register: React.FC = () => {
     setIsLoading(true);
     try {
       await registerUser(data.email, data.password, data.name, data.phone, data.isSolarProvider);
-      toast({
-        title: 'Registration successful',
-        description: 'Welcome to Ray Unity!',
-      });
       
-      // Redirect based on user type
+      // Redirect based on user type - this will happen automatically now through the auth listener
       if (data.isSolarProvider) {
         navigate('/provider/dashboard');
       } else {
         navigate('/dashboard');
       }
     } catch (error) {
-      toast({
-        title: 'Registration failed',
-        description: error instanceof Error ? error.message : 'An error occurred during registration',
-        variant: 'destructive',
-      });
+      // Error handled in the auth context
+      console.error("Registration error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -96,6 +97,7 @@ const Register: React.FC = () => {
                           placeholder="John Doe" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -114,6 +116,7 @@ const Register: React.FC = () => {
                           type="email" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -131,6 +134,7 @@ const Register: React.FC = () => {
                           placeholder="9876543210" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -149,6 +153,7 @@ const Register: React.FC = () => {
                           type="password" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -167,6 +172,7 @@ const Register: React.FC = () => {
                           type="password" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -182,6 +188,7 @@ const Register: React.FC = () => {
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
@@ -198,7 +205,13 @@ const Register: React.FC = () => {
                   className="w-full bg-solar-yellow text-foreground hover:bg-solar-orange"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Creating Account...' : 'Create Account'}
+                  {isLoading ? (
+                    <>
+                      <Loader className="mr-2 h-4 w-4 animate-spin" /> Creating Account...
+                    </>
+                  ) : (
+                    'Create Account'
+                  )}
                 </Button>
               </form>
             </Form>

@@ -15,6 +15,11 @@ import ProviderDashboard from "./pages/ProviderDashboard";
 import CreateCommunity from "./pages/CreateCommunity";
 import JoinCommunity from "./pages/JoinCommunity";
 import EnergyInput from "./pages/EnergyInput";
+import About from "./pages/About";
+import HowItWorks from "./pages/HowItWorks";
+import InstallationTracking from "./pages/InstallationTracking";
+import EnergyConsumption from "./pages/EnergyConsumption";
+import CommunityVoting from "./pages/CommunityVoting";
 import NotFound from "./pages/NotFound";
 
 // Create a new QueryClient instance
@@ -37,6 +42,11 @@ const App = () => (
               <Route path="/communities/create" element={<CreateCommunity />} />
               <Route path="/communities/join" element={<JoinCommunity />} />
               <Route path="/energy/input" element={<EnergyInput />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/installation/tracking" element={<InstallationTracking />} />
+              <Route path="/energy/consumption" element={<EnergyConsumption />} />
+              <Route path="/communities/voting/:id" element={<CommunityVoting />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Route>

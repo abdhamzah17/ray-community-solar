@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { Loader } from 'lucide-react';
 
 // Form validation schema
 const formSchema = z.object({
@@ -20,10 +21,17 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const Login: React.FC = () => {
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   // Form setup with react-hook-form and zod validation
   const form = useForm<FormValues>({
@@ -38,17 +46,10 @@ const Login: React.FC = () => {
     setIsLoading(true);
     try {
       await login(data.email, data.password);
-      toast({
-        title: 'Login successful',
-        description: 'Welcome back to Ray Unity!',
-      });
       navigate('/dashboard');
     } catch (error) {
-      toast({
-        title: 'Login failed',
-        description: error instanceof Error ? error.message : 'Please check your credentials and try again',
-        variant: 'destructive',
-      });
+      // Error handled in the auth context
+      console.error("Login error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +80,7 @@ const Login: React.FC = () => {
                           type="email" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -97,6 +99,7 @@ const Login: React.FC = () => {
                           type="password" 
                           {...field} 
                           className="solar-input"
+                          disabled={isLoading}
                         />
                       </FormControl>
                       <FormMessage />
@@ -108,7 +111,13 @@ const Login: React.FC = () => {
                   className="w-full bg-solar-yellow text-foreground hover:bg-solar-orange"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Signing In...' : 'Sign In'}
+                  {isLoading ? (
+                    <>
+                      <Loader className="mr-2 h-4 w-4 animate-spin" /> Signing In...
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
                 </Button>
               </form>
             </Form>
