@@ -107,6 +107,230 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          community_id: string
+          created_at: string | null
+          estimated_completion_date: string | null
+          id: string
+          progress_percentage: number
+          provider_id: string
+          status: string
+          total_cost: number
+        }
+        Insert: {
+          community_id: string
+          created_at?: string | null
+          estimated_completion_date?: string | null
+          id?: string
+          progress_percentage?: number
+          provider_id: string
+          status: string
+          total_cost: number
+        }
+        Update: {
+          community_id?: string
+          created_at?: string | null
+          estimated_completion_date?: string | null
+          id?: string
+          progress_percentage?: number
+          provider_id?: string
+          status?: string
+          total_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_quotes: {
+        Row: {
+          created_at: string | null
+          details: Json
+          id: string
+          provider_id: string
+          quote_request_id: string
+          total_cost: number
+        }
+        Insert: {
+          created_at?: string | null
+          details: Json
+          id?: string
+          provider_id: string
+          quote_request_id: string
+          total_cost: number
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json
+          id?: string
+          provider_id?: string
+          quote_request_id?: string
+          total_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_quotes_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_quotes_quote_request_id_fkey"
+            columns: ["quote_request_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quote_requests: {
+        Row: {
+          closed_at: string | null
+          community_id: string
+          created_at: string | null
+          id: string
+          requested_by: string
+          status: string
+        }
+        Insert: {
+          closed_at?: string | null
+          community_id: string
+          created_at?: string | null
+          id?: string
+          requested_by: string
+          status?: string
+        }
+        Update: {
+          closed_at?: string | null
+          community_id?: string
+          created_at?: string | null
+          id?: string
+          requested_by?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_requests_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      selected_providers: {
+        Row: {
+          created_at: string | null
+          id: string
+          provider_id: string
+          provider_quote_id: string
+          quote_request_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          provider_id: string
+          provider_quote_id: string
+          quote_request_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          provider_id?: string
+          provider_quote_id?: string
+          quote_request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "selected_providers_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "selected_providers_provider_quote_id_fkey"
+            columns: ["provider_quote_id"]
+            isOneToOne: false
+            referencedRelation: "provider_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "selected_providers_quote_request_id_fkey"
+            columns: ["quote_request_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      votes: {
+        Row: {
+          created_at: string | null
+          id: string
+          provider_quote_id: string
+          quote_request_id: string
+          voter_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          provider_quote_id: string
+          quote_request_id: string
+          voter_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          provider_quote_id?: string
+          quote_request_id?: string
+          voter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_provider_quote_id_fkey"
+            columns: ["provider_quote_id"]
+            isOneToOne: false
+            referencedRelation: "provider_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_quote_request_id_fkey"
+            columns: ["quote_request_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_voter_id_fkey"
+            columns: ["voter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       community_member_counts: {

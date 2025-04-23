@@ -53,7 +53,7 @@ const CommunityVoting: React.FC = () => {
   const { id: quoteRequestId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [quoteRequest, setQuoteRequest] = useState<QuoteRequest | null>(null);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [isUserAdmin, setIsUserAdmin] = useState(false);
@@ -61,7 +61,7 @@ const CommunityVoting: React.FC = () => {
   const [endVotingDialogOpen, setEndVotingDialogOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Quote | null>(null);
   const [endVotingLoading, setEndVotingLoading] = useState(false);
-  
+
   useEffect(() => {
     if (!currentUser) {
       navigate('/login');
@@ -76,54 +76,42 @@ const CommunityVoting: React.FC = () => {
     const fetchVotingData = async () => {
       try {
         setLoading(true);
-        
+
         // Get quote request details
         const { data: requestData, error: requestError } = await supabase
           .from('quote_requests')
-          .select(`
-            id,
-            community_id,
-            requested_by,
-            status,
-            created_at,
-            closed_at
-          `)
+          .select('id, community_id, requested_by, status, created_at, closed_at')
           .eq('id', quoteRequestId)
           .maybeSingle();
-          
+
         if (requestError || !requestData) {
           throw requestError || new Error("Quote request not found");
         }
-        
+
         // Get community details
         const { data: communityData, error: communityError } = await supabase
           .from('communities')
           .select('name, admin_id')
           .eq('id', requestData.community_id)
           .maybeSingle();
-          
+
         if (communityError || !communityData) {
           throw communityError || new Error("Community not found");
         }
-        
+
         // Check if user is community admin
         setIsUserAdmin(communityData.admin_id === currentUser.id);
-        
+
         // Get provider quotes
         const { data: quotesData, error: quotesError } = await supabase
           .from('provider_quotes')
-          .select(`
-            id,
-            provider_id,
-            total_cost,
-            details
-          `)
+          .select('id, provider_id, total_cost, details')
           .eq('quote_request_id', quoteRequestId);
-          
+
         if (quotesError || !quotesData) {
           throw quotesError || new Error("No provider quotes found.");
         }
-        
+
         // Get provider details
         const providerIds = quotesData.map(quote => quote.provider_id);
         let providersData: Provider[] = [];
@@ -139,17 +127,17 @@ const CommunityVoting: React.FC = () => {
             email: p.email
           }));
         }
-        
+
         // Get votes
         const { data: votesData, error: votesError } = await supabase
           .from('votes')
           .select('id, provider_quote_id, voter_id')
           .eq('quote_request_id', quoteRequestId);
-          
+
         if (votesError || !votesData) {
           throw votesError || new Error("Votes could not be loaded");
         }
-        
+
         // Calculate vote counts and whether current user has voted
         const totalVotes = votesData ? votesData.length : 0;
         const enhancedQuotes: Quote[] = quotesData.map(quote => {
@@ -157,7 +145,7 @@ const CommunityVoting: React.FC = () => {
           const quotesVotes = votesData.filter(v => v.provider_quote_id === quote.id).length || 0;
           const votePercentage = totalVotes > 0 ? Math.round((quotesVotes / totalVotes) * 100) : 0;
           const hasUserVoted = votesData.some(v => v.provider_quote_id === quote.id && v.voter_id === currentUser.id) || false;
-          
+
           return {
             ...quote,
             provider,
@@ -166,10 +154,10 @@ const CommunityVoting: React.FC = () => {
             has_user_voted: hasUserVoted
           } as Quote;
         });
-        
+
         // Sort quotes by votes count (descending)
         enhancedQuotes.sort((a, b) => b.votes_count - a.votes_count);
-        
+
         setQuoteRequest({
           ...requestData,
           community_name: communityData.name,
@@ -177,7 +165,7 @@ const CommunityVoting: React.FC = () => {
           total_votes: totalVotes
         });
         setQuotes(enhancedQuotes);
-        
+
       } catch (error: any) {
         toast({
           title: "Error loading voting data",
@@ -197,7 +185,7 @@ const CommunityVoting: React.FC = () => {
     try {
       // Check if user has already voted
       const hasVoted = quotes.some(q => q.has_user_voted);
-      
+
       if (hasVoted) {
         // Update existing vote
         const { data: existingVote, error: findError } = await supabase
@@ -206,11 +194,11 @@ const CommunityVoting: React.FC = () => {
           .eq('quote_request_id', quoteRequestId)
           .eq('voter_id', currentUser?.id)
           .maybeSingle();
-          
+
         if (findError) {
           throw findError;
         }
-        
+
         if (existingVote) {
           // Update vote
           const { error: updateError } = await supabase
@@ -219,7 +207,7 @@ const CommunityVoting: React.FC = () => {
               provider_quote_id: quoteId
             })
             .eq('id', existingVote.id);
-            
+
           if (updateError) {
             throw updateError;
           }
@@ -233,26 +221,26 @@ const CommunityVoting: React.FC = () => {
             provider_quote_id: quoteId,
             voter_id: currentUser?.id
           });
-          
+
         if (insertError) {
           throw insertError;
         }
       }
-      
+
       // Update local state
       setQuotes(quotes.map(quote => ({
         ...quote,
         has_user_voted: quote.id === quoteId,
       })));
-      
+
       toast({
         title: "Vote recorded",
         description: "Your vote has been successfully submitted.",
       });
-      
+
       // Refresh data
       window.location.reload();
-      
+
     } catch (error: any) {
       toast({
         title: "Voting failed",
@@ -261,13 +249,13 @@ const CommunityVoting: React.FC = () => {
       });
     }
   };
-  
+
   const handleEndVoting = async () => {
     if (!selectedProvider || !quoteRequest) return;
-    
+
     try {
       setEndVotingLoading(true);
-      
+
       // Update quote request status to closed
       const { error: updateRequestError } = await supabase
         .from('quote_requests')
@@ -276,11 +264,11 @@ const CommunityVoting: React.FC = () => {
           closed_at: new Date().toISOString()
         })
         .eq('id', quoteRequestId);
-        
+
       if (updateRequestError) {
         throw updateRequestError;
       }
-      
+
       // Add selected provider record
       const { error: insertProviderError } = await supabase
         .from('selected_providers')
@@ -289,11 +277,11 @@ const CommunityVoting: React.FC = () => {
           provider_quote_id: selectedProvider.id,
           provider_id: selectedProvider.provider_id
         });
-        
+
       if (insertProviderError) {
         throw insertProviderError;
       }
-      
+
       // Create project
       const { error: insertProjectError } = await supabase
         .from('projects')
@@ -305,18 +293,18 @@ const CommunityVoting: React.FC = () => {
           total_cost: selectedProvider.total_cost,
           estimated_completion_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
         });
-        
+
       if (insertProjectError) {
         throw insertProjectError;
       }
-      
+
       toast({
         title: "Voting ended",
         description: "The provider has been selected and the project is now being created.",
       });
-      
+
       navigate('/dashboard');
-      
+
     } catch (error: any) {
       toast({
         title: "Failed to end voting",
